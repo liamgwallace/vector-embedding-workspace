@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vector Embedding Playground</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+
+        .section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #7f8c8d;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0;
+        }
+
+        .config-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .config-group label {
+            font-size: 12px;
+            color: #95a5a6;
+        }
+
+        .config-group select,
+        .config-group input[type="number"] {
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+            width: 60px;
+        }
+
+        .register-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .register-label {
+            font-weight: 600;
+            font-size: 16px;
+            color: #3498db;
+            width: 30px;
+        }
+
+        .register-input {
+            flex: 1;
+            padding: 10px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .register-input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+
+        .register-input.invalid {
+            border-color: #e74c3c;
+            background: #fdf2f2;
+        }
+
+        .register-input.valid {
+            border-color: #27ae60;
+        }
+
+        .equation-input {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            font-family: 'Courier New', monospace;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+
+        .equation-input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .calculate-btn {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            background: #3498db;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .calculate-btn:hover {
+            background: #2980b9;
+        }
+
+        .calculate-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .results-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-rank {
+            font-size: 12px;
+            color: #95a5a6;
+            width: 30px;
+        }
+
+        .result-word {
+            flex: 1;
+            font-weight: 500;
+            font-size: 16px;
+            color: #2c3e50;
+        }
+
+        .result-similarity {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: #7f8c8d;
+            background: #f8f9fa;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .error-message {
+            color: #e74c3c;
+            padding: 15px;
+            background: #fdf2f2;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .empty-state {
+            color: #95a5a6;
+            text-align: center;
+            padding: 30px;
+            font-style: italic;
+        }
+
+        .history-select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .history-select:disabled {
+            background: #f8f9fa;
+            color: #95a5a6;
+        }
+
+        .words-used {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .words-used strong {
+            color: #2c3e50;
+        }
+
+        .hint {
+            font-size: 12px;
+            color: #95a5a6;
+            margin-top: 8px;
+        }
+
+        .status-bar {
+            text-align: center;
+            font-size: 12px;
+            color: #95a5a6;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Vector Embedding Playground</h1>
+
+    <!-- Registers Section -->
+    <div class="section">
+        <div class="section-header">
+            <h2 class="section-title">Registers</h2>
+            <div class="config-group">
+                <label for="num-registers">Count:</label>
+                <select id="num-registers">
+                    <option value="3">3</option>
+                    <option value="5" selected>5</option>
+                    <option value="8">8</option>
+                    <option value="10">10</option>
+                </select>
+            </div>
+        </div>
+        <div id="registers-container"></div>
+        <p class="hint">Assign words to registers (A, B, C...) to use in equations</p>
+    </div>
+
+    <!-- Equation Section -->
+    <div class="section">
+        <div class="section-header">
+            <h2 class="section-title">Equation</h2>
+            <div class="config-group">
+                <label for="num-results">Results:</label>
+                <input type="number" id="num-results" value="10" min="1" max="50">
+            </div>
+        </div>
+        <input type="text" id="equation" class="equation-input" placeholder="e.g., A - B + C  or  king - man + woman">
+        <button id="calculate-btn" class="calculate-btn">Calculate</button>
+        <p class="hint">Use + and - to combine vectors. Use register names or words directly.</p>
+    </div>
+
+    <!-- Results Section -->
+    <div class="section">
+        <div class="section-header">
+            <h2 class="section-title">Results</h2>
+        </div>
+        <div id="words-used" class="words-used" style="display: none;"></div>
+        <div id="results-container">
+            <div class="empty-state">Enter an equation and click Calculate</div>
+        </div>
+    </div>
+
+    <!-- History Section -->
+    <div class="section">
+        <div class="section-header">
+            <h2 class="section-title">History</h2>
+        </div>
+        <select id="history-select" class="history-select" disabled>
+            <option value="">No history yet</option>
+        </select>
+    </div>
+
+    <div class="status-bar" id="status-bar">Loading...</div>
+
+    <script>
+        // State
+        let registers = {};
+        let history = [];
+
+        // DOM Elements
+        const numRegistersSelect = document.getElementById('num-registers');
+        const registersContainer = document.getElementById('registers-container');
+        const equationInput = document.getElementById('equation');
+        const numResultsInput = document.getElementById('num-results');
+        const calculateBtn = document.getElementById('calculate-btn');
+        const resultsContainer = document.getElementById('results-container');
+        const wordsUsedDiv = document.getElementById('words-used');
+        const historySelect = document.getElementById('history-select');
+        const statusBar = document.getElementById('status-bar');
+
+        // Initialize registers
+        function initRegisters(count) {
+            registersContainer.innerHTML = '';
+            registers = {};
+
+            for (let i = 0; i < count; i++) {
+                const letter = String.fromCharCode(65 + i); // A, B, C...
+                registers[letter] = '';
+
+                const row = document.createElement('div');
+                row.className = 'register-row';
+                row.innerHTML = `
+                    <span class="register-label">${letter}</span>
+                    <input type="text" class="register-input" id="reg-${letter}"
+                           placeholder="Enter a word..." data-register="${letter}">
+                `;
+                registersContainer.appendChild(row);
+            }
+
+            // Add event listeners for word validation
+            document.querySelectorAll('.register-input').forEach(input => {
+                input.addEventListener('input', (e) => {
+                    const reg = e.target.dataset.register;
+                    registers[reg] = e.target.value.trim();
+                    validateWord(e.target);
+                });
+            });
+        }
+
+        // Validate a word exists in vocabulary
+        async function validateWord(inputElement) {
+            const word = inputElement.value.trim();
+            if (!word) {
+                inputElement.classList.remove('valid', 'invalid');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/check_word/${encodeURIComponent(word)}`);
+                const data = await response.json();
+                inputElement.classList.toggle('valid', data.exists);
+                inputElement.classList.toggle('invalid', !data.exists);
+            } catch (err) {
+                inputElement.classList.remove('valid', 'invalid');
+            }
+        }
+
+        // Calculate results
+        async function calculate() {
+            const equation = equationInput.value.trim();
+            if (!equation) {
+                showError('Please enter an equation');
+                return;
+            }
+
+            calculateBtn.disabled = true;
+            calculateBtn.textContent = 'Calculating...';
+
+            try {
+                const response = await fetch('/api/calculate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        equation: equation,
+                        registers: registers,
+                        num_results: parseInt(numResultsInput.value) || 10
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    showError(data.error);
+                } else {
+                    showResults(data.results, data.words_used);
+                    addToHistory(equation, registers, data.results);
+                }
+            } catch (err) {
+                showError('Failed to connect to server');
+            } finally {
+                calculateBtn.disabled = false;
+                calculateBtn.textContent = 'Calculate';
+            }
+        }
+
+        // Show results
+        function showResults(results, wordsUsed) {
+            if (wordsUsed && wordsUsed.length > 0) {
+                wordsUsedDiv.innerHTML = `<strong>Words used:</strong> ${wordsUsed.join(' + ')}`;
+                wordsUsedDiv.style.display = 'block';
+            } else {
+                wordsUsedDiv.style.display = 'none';
+            }
+
+            if (results.length === 0) {
+                resultsContainer.innerHTML = '<div class="empty-state">No results found</div>';
+                return;
+            }
+
+            const html = `
+                <ul class="results-list">
+                    ${results.map((r, i) => `
+                        <li class="result-item">
+                            <span class="result-rank">${i + 1}.</span>
+                            <span class="result-word">${r.word}</span>
+                            <span class="result-similarity">${r.similarity.toFixed(4)}</span>
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+            resultsContainer.innerHTML = html;
+        }
+
+        // Show error
+        function showError(message) {
+            wordsUsedDiv.style.display = 'none';
+            resultsContainer.innerHTML = `<div class="error-message">${message}</div>`;
+        }
+
+        // Add to history
+        function addToHistory(equation, regs, results) {
+            const entry = {
+                equation: equation,
+                registers: { ...regs },
+                topResult: results[0]?.word || 'N/A',
+                numResults: parseInt(numResultsInput.value) || 10
+            };
+
+            // Avoid duplicates
+            const key = JSON.stringify({ equation: entry.equation, registers: entry.registers });
+            if (history.length > 0 && JSON.stringify({ equation: history[0].equation, registers: history[0].registers }) === key) {
+                return;
+            }
+
+            history.unshift(entry);
+            if (history.length > 20) history.pop();
+
+            updateHistorySelect();
+        }
+
+        // Update history dropdown
+        function updateHistorySelect() {
+            if (history.length === 0) {
+                historySelect.innerHTML = '<option value="">No history yet</option>';
+                historySelect.disabled = true;
+                return;
+            }
+
+            historySelect.disabled = false;
+            historySelect.innerHTML = '<option value="">-- Select from history --</option>' +
+                history.map((h, i) => `<option value="${i}">${h.equation} → ${h.topResult}</option>`).join('');
+        }
+
+        // Load from history
+        function loadFromHistory(index) {
+            if (index === '' || index === null) return;
+
+            const entry = history[parseInt(index)];
+            if (!entry) return;
+
+            // Restore equation
+            equationInput.value = entry.equation;
+            numResultsInput.value = entry.numResults;
+
+            // Restore registers
+            const regCount = Object.keys(entry.registers).filter(k => entry.registers[k]).length;
+            const minRegs = Math.max(regCount, parseInt(numRegistersSelect.value));
+
+            // Find appropriate register count
+            const counts = [3, 5, 8, 10];
+            const targetCount = counts.find(c => c >= minRegs) || 10;
+            numRegistersSelect.value = targetCount;
+            initRegisters(targetCount);
+
+            // Fill in register values
+            for (const [reg, value] of Object.entries(entry.registers)) {
+                const input = document.getElementById(`reg-${reg}`);
+                if (input && value) {
+                    input.value = value;
+                    registers[reg] = value;
+                    validateWord(input);
+                }
+            }
+
+            // Reset history select
+            historySelect.value = '';
+
+            // Re-run calculation
+            calculate();
+        }
+
+        // Event listeners
+        numRegistersSelect.addEventListener('change', () => {
+            initRegisters(parseInt(numRegistersSelect.value));
+        });
+
+        calculateBtn.addEventListener('click', calculate);
+
+        equationInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') calculate();
+        });
+
+        historySelect.addEventListener('change', (e) => {
+            loadFromHistory(e.target.value);
+        });
+
+        // Initialize
+        async function init() {
+            initRegisters(5);
+
+            try {
+                const response = await fetch('/api/vocab_size');
+                const data = await response.json();
+                statusBar.textContent = `Vocabulary: ${data.size.toLocaleString()} words (${data.dimensions}D)`;
+            } catch (err) {
+                statusBar.textContent = 'Could not connect to server';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>
