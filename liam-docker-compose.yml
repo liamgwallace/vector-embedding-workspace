@@ -1,0 +1,25 @@
+services:
+     embeddings:
+       image: ghcr.io/liamgwallace/vector-embedding-workspace:latest
+       container_name: embeddings
+       ports:
+         - "5420:5000"
+       restart: unless-stopped
+       environment:
+         - TZ=UTC
+         - FLASK_ENV=production
+         - PYTHONUNBUFFERED=1
+       networks:
+         - web
+       labels:
+         - traefik.enable=true
+         - traefik.docker.network=web
+         - traefik.http.routers.embeddings.rule=Host(`embeddings.bramleyvale.com`)
+         #- traefik.http.routers.embeddings.entrypoints=web,websecure
+         - traefik.http.routers.embeddings.entrypoints=web
+         #- traefik.http.routers.embeddings.tls=true
+         - traefik.http.services.embeddings.loadbalancer.server.port=5000
+
+networks:
+     web:
+       external: true

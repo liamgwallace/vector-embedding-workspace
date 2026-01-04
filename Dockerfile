@@ -10,6 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY server.py .
 COPY download_embeddings.py .
 COPY templates/ templates/
+COPY vectors/ vectors/
 
 # Create embeddings directory
 RUN mkdir -p embeddings
