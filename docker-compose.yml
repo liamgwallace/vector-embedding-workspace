@@ -1,0 +1,12 @@
+
+version: '3.8'
+
+services:
+  vector-playground:
+    image: ghcr.io/liamgwallace/vector-embedding-workspace:latest
+    container_name: vector-playground
+    ports:
+      - "5000:5000"
+    restart: unless-stopped
+    environment:
+      - TZ=UTC

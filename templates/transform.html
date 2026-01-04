@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semantic Concepts - Vector Embedding Playground</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .nav {
+            background: white;
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .nav a {
+            color: #3498db;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .nav a:hover {
+            background: #e3f2fd;
+        }
+
+        .nav a.active {
+            background: #3498db;
+            color: white;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #ecf0f1;
+        }
+
+        .hint {
+            font-size: 12px;
+            color: #95a5a6;
+            margin-top: 8px;
+            line-height: 1.4;
+        }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: 'Courier New', monospace;
+            resize: vertical;
+            min-height: 150px;
+        }
+
+        textarea:focus, input:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+        }
+
+        .input-word {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+            background: #3498db;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #2980b9;
+        }
+
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+
+        .info-box {
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            padding: 12px 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .info-box strong {
+            color: #2c3e50;
+        }
+
+        .results-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-rank {
+            font-size: 12px;
+            color: #95a5a6;
+            width: 30px;
+        }
+
+        .result-word {
+            flex: 1;
+            font-weight: 500;
+            font-size: 16px;
+            color: #2c3e50;
+        }
+
+        .result-similarity {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: #7f8c8d;
+            background: #f8f9fa;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        .error-message {
+            color: #e74c3c;
+            padding: 15px;
+            background: #fdf2f2;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .success-message {
+            color: #27ae60;
+            padding: 15px;
+            background: #f0fdf4;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .empty-state {
+            color: #95a5a6;
+            text-align: center;
+            padding: 30px;
+            font-style: italic;
+        }
+
+        .examples {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .examples-title {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 8px;
+        }
+
+        .example-link {
+            display: inline-block;
+            margin-right: 15px;
+            color: #3498db;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+
+        .example-link:hover {
+            color: #2980b9;
+        }
+
+        .status-bar {
+            text-align: center;
+            font-size: 12px;
+            color: #95a5a6;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <a href="/">Word Equations</a>
+        <a href="/transform" class="active">Semantic Concepts</a>
+    </div>
+
+    <h1>Semantic Concepts</h1>
+
+    <!-- Explanation Section -->
+    <div class="section">
+        <p style="color: #2c3e50; line-height: 1.6; margin: 0;">
+            Extract general concepts from word pair examples, then apply them to new words. For example,
+            if you provide pairs like <strong>cow→beef</strong> and <strong>pig→pork</strong>, the system learns the
+            "animal to food" concept by averaging the vector differences. You can then apply this concept to
+            <strong>deer</strong> to get <strong>venison</strong>. Try it with countries→capitals, verbs→past tense, or any pattern you can think of.
+        </p>
+    </div>
+
+    <!-- Input Pairs Section -->
+    <div class="section">
+        <h2 class="section-title">Step 1: Enter Word Pairs</h2>
+        <textarea id="pairs-input" placeholder="Enter word pairs, one per line, comma-separated&#10;Example:&#10;cow,beef&#10;pig,pork&#10;sheep,mutton"></textarea>
+        <p class="hint">Enter pairs in format: word_from,word_to (one pair per line). The system will learn the transformation pattern from these examples.</p>
+
+        <div class="examples">
+            <div class="examples-title">Quick Examples:</div>
+            <div id="examples-container">Loading examples...</div>
+        </div>
+
+        <button id="calculate-transform-btn" style="margin-top: 15px;">Calculate Transformation Vector</button>
+        <div id="transform-status" style="margin-top: 15px;"></div>
+    </div>
+
+    <!-- Transformation Vector Results -->
+    <div class="section" id="transform-results-section" style="display: none;">
+        <h2 class="section-title">Transformation Vector Analysis</h2>
+        <div class="info-box">
+            <strong>What this means:</strong> These words represent the semantic direction of your transformation. They show what concept the learned pattern captures.
+        </div>
+        <div id="transform-results"></div>
+    </div>
+
+    <!-- Apply Transformation Section -->
+    <div class="section" id="apply-section" style="display: none;">
+        <h2 class="section-title">Step 2: Apply Transformation</h2>
+        <input type="text" id="word-input" class="input-word" placeholder="Enter a word to transform...">
+        <p class="hint">Enter any word and press the button to apply the learned transformation pattern to it.</p>
+        <button id="apply-transform-btn" style="margin-top: 15px;">Apply Transformation</button>
+        <div id="apply-status" style="margin-top: 15px;"></div>
+    </div>
+
+    <!-- Applied Results -->
+    <div class="section" id="applied-results-section" style="display: none;">
+        <h2 class="section-title">Transformation Results</h2>
+        <div id="applied-results"></div>
+    </div>
+
+    <div class="status-bar" id="status-bar">Loading...</div>
+
+    <script>
+        // State
+        let transformCalculated = false;
+        let lastInputWord = '';
+
+        // DOM Elements
+        const pairsInput = document.getElementById('pairs-input');
+        const calculateBtn = document.getElementById('calculate-transform-btn');
+        const transformStatus = document.getElementById('transform-status');
+        const transformResultsSection = document.getElementById('transform-results-section');
+        const transformResults = document.getElementById('transform-results');
+
+        const applySection = document.getElementById('apply-section');
+        const wordInput = document.getElementById('word-input');
+        const applyBtn = document.getElementById('apply-transform-btn');
+        const applyStatus = document.getElementById('apply-status');
+        const appliedResultsSection = document.getElementById('applied-results-section');
+        const appliedResults = document.getElementById('applied-results');
+
+        const statusBar = document.getElementById('status-bar');
+
+        // Load available examples
+        async function loadExamplesList() {
+            try {
+                const response = await fetch('/api/list_examples');
+                const data = await response.json();
+
+                const container = document.getElementById('examples-container');
+
+                if (data.examples && data.examples.length > 0) {
+                    container.innerHTML = data.examples.map(ex =>
+                        `<span class="example-link" onclick="loadExample('${ex.filename}')">${ex.name}</span>`
+                    ).join('');
+                } else {
+                    container.innerHTML = '<span style="color: #95a5a6;">No examples available</span>';
+                }
+            } catch (err) {
+                document.getElementById('examples-container').innerHTML = '<span style="color: #e74c3c;">Failed to load examples</span>';
+            }
+        }
+
+        // Load example data from CSV file
+        async function loadExample(filename) {
+            try {
+                const response = await fetch(`/api/load_example/${filename}`);
+                const data = await response.json();
+
+                if (data.success && data.pairs) {
+                    // Convert pairs array to CSV text
+                    pairsInput.value = data.pairs.map(pair => pair.join(',')).join('\n');
+                } else {
+                    showTransformError(data.error || 'Failed to load example');
+                }
+            } catch (err) {
+                showTransformError('Failed to load example file');
+            }
+        }
+
+        // Calculate transformation vector
+        async function calculateTransformation() {
+            const pairsText = pairsInput.value.trim();
+            if (!pairsText) {
+                showTransformError('Please enter word pairs');
+                return;
+            }
+
+            // Parse pairs
+            const lines = pairsText.split('\n');
+            const pairs = [];
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (!trimmed) continue;
+                const parts = trimmed.split(',');
+                if (parts.length !== 2) {
+                    showTransformError(`Invalid format on line: "${line}"`);
+                    return;
+                }
+                pairs.push([parts[0].trim(), parts[1].trim()]);
+            }
+
+            if (pairs.length === 0) {
+                showTransformError('No valid pairs found');
+                return;
+            }
+
+            calculateBtn.disabled = true;
+            calculateBtn.textContent = 'Calculating...';
+            transformStatus.innerHTML = '';
+
+            try {
+                const response = await fetch('/api/calculate_transformation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pairs: pairs })
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    showTransformError(data.error);
+                } else {
+                    showTransformSuccess(data);
+                    transformCalculated = true;
+                    applySection.style.display = 'block';
+                    wordInput.focus();
+                }
+            } catch (err) {
+                showTransformError('Failed to connect to server');
+            } finally {
+                calculateBtn.disabled = false;
+                calculateBtn.textContent = 'Calculate Transformation Vector';
+            }
+        }
+
+        // Apply transformation to word
+        async function applyTransformation() {
+            const word = wordInput.value.trim();
+            if (!word) {
+                showApplyError('Please enter a word');
+                return;
+            }
+
+            applyBtn.disabled = true;
+            applyBtn.textContent = 'Applying...';
+            applyStatus.innerHTML = '';
+
+            try {
+                const response = await fetch('/api/apply_transformation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ word: word })
+                });
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    showApplyError(data.error);
+                } else {
+                    showApplySuccess(data, word);
+                    lastInputWord = word;
+                }
+            } catch (err) {
+                showApplyError('Failed to connect to server');
+            } finally {
+                applyBtn.disabled = false;
+                applyBtn.textContent = 'Apply Transformation';
+            }
+        }
+
+        // Show results
+        function showTransformSuccess(data) {
+            transformStatus.innerHTML = `<div class="success-message">
+                Transformation calculated from ${data.total_pairs} pairs (${data.valid_pairs} valid, ${data.outliers_removed} outliers removed)
+            </div>`;
+
+            if (data.outliers && data.outliers.length > 0) {
+                const outlierText = data.outliers.map(o => `${o[0]} → ${o[1]}`).join(', ');
+                transformStatus.innerHTML += `<div class="info-box" style="margin-top: 10px;">
+                    <strong>Outliers removed:</strong> ${outlierText}
+                </div>`;
+            }
+
+            const html = `
+                <ul class="results-list">
+                    ${data.transform_words.map((r, i) => `
+                        <li class="result-item">
+                            <span class="result-rank">${i + 1}.</span>
+                            <span class="result-word">${r.word}</span>
+                            <span class="result-similarity">${r.similarity.toFixed(4)}</span>
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+            transformResults.innerHTML = html;
+            transformResultsSection.style.display = 'block';
+        }
+
+        function showApplySuccess(data, word) {
+            applyStatus.innerHTML = '';
+
+            const html = `
+                <div class="info-box">
+                    <strong>Applied transformation to:</strong> "${word}"
+                </div>
+                <ul class="results-list">
+                    ${data.results.map((r, i) => `
+                        <li class="result-item">
+                            <span class="result-rank">${i + 1}.</span>
+                            <span class="result-word">${r.word}</span>
+                            <span class="result-similarity">${r.similarity.toFixed(4)}</span>
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+            appliedResults.innerHTML = html;
+            appliedResultsSection.style.display = 'block';
+        }
+
+        function showTransformError(message) {
+            transformStatus.innerHTML = `<div class="error-message">${message}</div>`;
+            transformResultsSection.style.display = 'none';
+        }
+
+        function showApplyError(message) {
+            applyStatus.innerHTML = `<div class="error-message">${message}</div>`;
+            appliedResults.innerHTML = '';
+        }
+
+        // Event listeners
+        calculateBtn.addEventListener('click', calculateTransformation);
+        applyBtn.addEventListener('click', applyTransformation);
+
+        wordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && transformCalculated) {
+                applyTransformation();
+            }
+        });
+
+        // Initialize
+        async function init() {
+            // Load available examples
+            loadExamplesList();
+
+            // Get vocabulary info
+            try {
+                const response = await fetch('/api/vocab_size');
+                const data = await response.json();
+                statusBar.textContent = `Vocabulary: ${data.size.toLocaleString()} words (${data.dimensions}D)`;
+            } catch (err) {
+                statusBar.textContent = 'Could not connect to server';
+            }
+        }
+
+        init();
+    </script>
+</body>
+</html>

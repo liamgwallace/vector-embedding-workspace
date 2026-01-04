@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vector Embedding Playground</title>
+    <title>Word Equations - Vector Embedding Playground</title>
     <style>
         * {
             box-sizing: border-box;
@@ -16,6 +16,35 @@
             padding: 20px;
             background: #f5f5f5;
             color: #333;
+        }
+
+        .nav {
+            background: white;
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .nav a {
+            color: #3498db;
+            text-decoration: none;
+            font-weight: 500;
+            padding: 8px 16px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .nav a:hover {
+            background: #e3f2fd;
+        }
+
+        .nav a.active {
+            background: #3498db;
+            color: white;
         }
 
         h1 {
@@ -66,43 +95,6 @@
             border-radius: 4px;
             font-size: 13px;
             width: 60px;
-        }
-
-        .register-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
-        .register-label {
-            font-weight: 600;
-            font-size: 16px;
-            color: #3498db;
-            width: 30px;
-        }
-
-        .register-input {
-            flex: 1;
-            padding: 10px 12px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-
-        .register-input:focus {
-            outline: none;
-            border-color: #3498db;
-            box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-        }
-
-        .register-input.invalid {
-            border-color: #e74c3c;
-            background: #fdf2f2;
-        }
-
-        .register-input.valid {
-            border-color: #27ae60;
         }
 
         .equation-input {
@@ -239,24 +231,22 @@
     </style>
 </head>
 <body>
-    <h1>Vector Embedding Playground</h1>
+    <div class="nav">
+        <a href="/" class="active">Word Equations</a>
+        <a href="/transform">Semantic Concepts</a>
+    </div>
 
-    <!-- Registers Section -->
+    <h1>Word Equations</h1>
+
+    <!-- Explanation Section -->
     <div class="section">
-        <div class="section-header">
-            <h2 class="section-title">Registers</h2>
-            <div class="config-group">
-                <label for="num-registers">Count:</label>
-                <select id="num-registers">
-                    <option value="3">3</option>
-                    <option value="5" selected>5</option>
-                    <option value="8">8</option>
-                    <option value="10">10</option>
-                </select>
-            </div>
-        </div>
-        <div id="registers-container"></div>
-        <p class="hint">Assign words to registers (A, B, C...) to use in equations</p>
+        <p style="color: #2c3e50; line-height: 1.6; margin: 0;">
+            Words are represented as points in a high-dimensional space where similar meanings are close together.
+            This lets you do math with words: <strong>woman - man</strong> gives a vector that represents the relationship
+            that maps man to woman. If that is added to king as <strong>woman - man + king = queen</strong>
+            the man to woman direction is added to the royalty direction giving a female royalty.
+            Try combining words with + and - to discover semantic relationships.
+        </p>
     </div>
 
     <!-- Equation Section -->
@@ -268,9 +258,9 @@
                 <input type="number" id="num-results" value="10" min="1" max="50">
             </div>
         </div>
-        <input type="text" id="equation" class="equation-input" placeholder="e.g., A - B + C  or  king - man + woman">
+        <input type="text" id="equation" class="equation-input" placeholder="e.g., woman - man + king">
         <button id="calculate-btn" class="calculate-btn">Calculate</button>
-        <p class="hint">Use + and - to combine vectors. Use register names or words directly.</p>
+        <p class="hint">Use + and - to combine words. Example: paris - france + germany</p>
     </div>
 
     <!-- Results Section -->
@@ -278,7 +268,7 @@
         <div class="section-header">
             <h2 class="section-title">Results</h2>
         </div>
-        <div id="words-used" class="words-used" style="display: none;"></div>
+        <div id="equation-display" class="words-used" style="display: none;"></div>
         <div id="results-container">
             <div class="empty-state">Enter an equation and click Calculate</div>
         </div>
@@ -298,66 +288,16 @@
 
     <script>
         // State
-        let registers = {};
         let history = [];
 
         // DOM Elements
-        const numRegistersSelect = document.getElementById('num-registers');
-        const registersContainer = document.getElementById('registers-container');
         const equationInput = document.getElementById('equation');
         const numResultsInput = document.getElementById('num-results');
         const calculateBtn = document.getElementById('calculate-btn');
         const resultsContainer = document.getElementById('results-container');
-        const wordsUsedDiv = document.getElementById('words-used');
+        const equationDisplayDiv = document.getElementById('equation-display');
         const historySelect = document.getElementById('history-select');
         const statusBar = document.getElementById('status-bar');
-
-        // Initialize registers
-        function initRegisters(count) {
-            registersContainer.innerHTML = '';
-            registers = {};
-
-            for (let i = 0; i < count; i++) {
-                const letter = String.fromCharCode(65 + i); // A, B, C...
-                registers[letter] = '';
-
-                const row = document.createElement('div');
-                row.className = 'register-row';
-                row.innerHTML = `
-                    <span class="register-label">${letter}</span>
-                    <input type="text" class="register-input" id="reg-${letter}"
-                           placeholder="Enter a word..." data-register="${letter}">
-                `;
-                registersContainer.appendChild(row);
-            }
-
-            // Add event listeners for word validation
-            document.querySelectorAll('.register-input').forEach(input => {
-                input.addEventListener('input', (e) => {
-                    const reg = e.target.dataset.register;
-                    registers[reg] = e.target.value.trim();
-                    validateWord(e.target);
-                });
-            });
-        }
-
-        // Validate a word exists in vocabulary
-        async function validateWord(inputElement) {
-            const word = inputElement.value.trim();
-            if (!word) {
-                inputElement.classList.remove('valid', 'invalid');
-                return;
-            }
-
-            try {
-                const response = await fetch(`/api/check_word/${encodeURIComponent(word)}`);
-                const data = await response.json();
-                inputElement.classList.toggle('valid', data.exists);
-                inputElement.classList.toggle('invalid', !data.exists);
-            } catch (err) {
-                inputElement.classList.remove('valid', 'invalid');
-            }
-        }
 
         // Calculate results
         async function calculate() {
@@ -376,7 +316,6 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         equation: equation,
-                        registers: registers,
                         num_results: parseInt(numResultsInput.value) || 10
                     })
                 });
@@ -386,8 +325,8 @@
                 if (!data.success) {
                     showError(data.error);
                 } else {
-                    showResults(data.results, data.words_used);
-                    addToHistory(equation, registers, data.results);
+                    showResults(data.results, data.equation);
+                    addToHistory(equation, data.results);
                 }
             } catch (err) {
                 showError('Failed to connect to server');
@@ -398,12 +337,12 @@
         }
 
         // Show results
-        function showResults(results, wordsUsed) {
-            if (wordsUsed && wordsUsed.length > 0) {
-                wordsUsedDiv.innerHTML = `<strong>Words used:</strong> ${wordsUsed.join(' + ')}`;
-                wordsUsedDiv.style.display = 'block';
+        function showResults(results, equation) {
+            if (equation) {
+                equationDisplayDiv.innerHTML = `<strong>Equation:</strong> ${equation}`;
+                equationDisplayDiv.style.display = 'block';
             } else {
-                wordsUsedDiv.style.display = 'none';
+                equationDisplayDiv.style.display = 'none';
             }
 
             if (results.length === 0) {
@@ -427,22 +366,20 @@
 
         // Show error
         function showError(message) {
-            wordsUsedDiv.style.display = 'none';
+            equationDisplayDiv.style.display = 'none';
             resultsContainer.innerHTML = `<div class="error-message">${message}</div>`;
         }
 
         // Add to history
-        function addToHistory(equation, regs, results) {
+        function addToHistory(equation, results) {
             const entry = {
                 equation: equation,
-                registers: { ...regs },
                 topResult: results[0]?.word || 'N/A',
                 numResults: parseInt(numResultsInput.value) || 10
             };
 
             // Avoid duplicates
-            const key = JSON.stringify({ equation: entry.equation, registers: entry.registers });
-            if (history.length > 0 && JSON.stringify({ equation: history[0].equation, registers: history[0].registers }) === key) {
+            if (history.length > 0 && history[0].equation === entry.equation) {
                 return;
             }
 
@@ -476,26 +413,6 @@
             equationInput.value = entry.equation;
             numResultsInput.value = entry.numResults;
 
-            // Restore registers
-            const regCount = Object.keys(entry.registers).filter(k => entry.registers[k]).length;
-            const minRegs = Math.max(regCount, parseInt(numRegistersSelect.value));
-
-            // Find appropriate register count
-            const counts = [3, 5, 8, 10];
-            const targetCount = counts.find(c => c >= minRegs) || 10;
-            numRegistersSelect.value = targetCount;
-            initRegisters(targetCount);
-
-            // Fill in register values
-            for (const [reg, value] of Object.entries(entry.registers)) {
-                const input = document.getElementById(`reg-${reg}`);
-                if (input && value) {
-                    input.value = value;
-                    registers[reg] = value;
-                    validateWord(input);
-                }
-            }
-
             // Reset history select
             historySelect.value = '';
 
@@ -504,9 +421,6 @@
         }
 
         // Event listeners
-        numRegistersSelect.addEventListener('change', () => {
-            initRegisters(parseInt(numRegistersSelect.value));
-        });
 
         calculateBtn.addEventListener('click', calculate);
 
@@ -520,8 +434,6 @@
 
         // Initialize
         async function init() {
-            initRegisters(5);
-
             try {
                 const response = await fetch('/api/vocab_size');
                 const data = await response.json();
