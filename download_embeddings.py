@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Download GloVe embeddings for the Vector Embedding Playground.
-Pre-processes embeddings by normalizing vectors and saving in optimized .npz format.
+Download FastText embeddings for the Vector Embedding Playground.
+Downloads the crawl-300d-2M-subword model which supports OOV (out-of-vocabulary) words
+through character n-gram subword vectors.
 """
 
 import os
@@ -11,46 +12,63 @@ import zipfile
 import numpy as np
 from sklearn.decomposition import PCA
 
-GLOVE_URL = "https://nlp.stanford.edu/data/glove.6B.zip"
+# FastText crawl-300d-2M-subword model (supports OOV via subwords)
+FASTTEXT_URL = "https://dl.fbaipublicfiles.com/fasttext/vectors-english/crawl-300d-2M-subword.zip"
 EMBEDDINGS_DIR = "embeddings"
-TARGET_FILE = "glove.6B.50d.txt"
-PROCESSED_FILE = "glove.6B.50d.npz"
-PCA_FILE = "glove.6B.50d.2d.npz"
+MODEL_FILE = "crawl-300d-2M-subword.bin"
+PROCESSED_FILE = "fasttext.crawl-300d-2M.npz"
+PCA_FILE = "fasttext.crawl-300d-2M.2d.npz"
+
+# Number of most frequent words to pre-compute for fast similarity search
+VOCAB_SIZE = 500000
 
 
 def download_progress(count, block_size, total_size):
     """Show download progress."""
     percent = int(count * block_size * 100 / total_size)
     percent = min(100, percent)
-    sys.stdout.write(f"\rDownloading: {percent}%")
+    downloaded_mb = count * block_size / 1024 / 1024
+    total_mb = total_size / 1024 / 1024
+    sys.stdout.write(f"\rDownloading: {percent}% ({downloaded_mb:.0f}/{total_mb:.0f} MB)")
     sys.stdout.flush()
 
 
-def process_embeddings(txt_path, npz_path):
+def process_fasttext_model(model_path, npz_path, vocab_size=VOCAB_SIZE):
     """
-    Load GloVe text file, normalize vectors, and save as optimized .npz format.
+    Load FastText binary model and extract vocabulary embeddings.
+    Pre-computes normalized vectors for fast similarity search.
     """
-    print(f"\nProcessing embeddings from {txt_path}...")
+    import fasttext
+
+    print(f"\nLoading FastText model from {model_path}...")
+    print("This may take a minute...")
+
+    model = fasttext.load_model(model_path)
+
+    # Get all words from the model
+    all_words = model.get_words()
+    print(f"  Model vocabulary size: {len(all_words)} words")
+
+    # Limit to top N words (they're already sorted by frequency)
+    words_to_process = all_words[:vocab_size]
+    print(f"  Processing top {len(words_to_process)} words...")
 
     words = []
     vectors = []
 
-    with open(txt_path, 'r', encoding='utf-8') as f:
-        for i, line in enumerate(f):
-            if (i + 1) % 50000 == 0:
-                print(f"  Processed {i + 1} words...")
+    for i, word in enumerate(words_to_process):
+        if (i + 1) % 50000 == 0:
+            print(f"    Processed {i + 1} words...")
 
-            parts = line.strip().split()
-            word = parts[0]
-            vector = np.array([float(x) for x in parts[1:]], dtype=np.float32)
+        vector = model.get_word_vector(word).astype(np.float32)
 
-            # Normalize the vector
-            norm = np.linalg.norm(vector)
-            if norm > 0:
-                vector = vector / norm
+        # Normalize the vector
+        norm = np.linalg.norm(vector)
+        if norm > 0:
+            vector = vector / norm
 
-            words.append(word)
-            vectors.append(vector)
+        words.append(word)
+        vectors.append(vector)
 
     # Convert to numpy arrays
     embedding_matrix = np.array(vectors, dtype=np.float32)
@@ -86,7 +104,6 @@ def compute_pca_2d(embedding_matrix, words, pca_path):
     print(f"  Saving to {pca_path}...")
 
     # Save 2D embeddings along with PCA transformation parameters
-    # We need mean and components to transform new vectors
     np.savez_compressed(pca_path,
                        embeddings_2d=embeddings_2d.astype(np.float32),
                        words=words,
@@ -100,52 +117,53 @@ def main():
     # Create embeddings directory
     os.makedirs(EMBEDDINGS_DIR, exist_ok=True)
 
-    target_path = os.path.join(EMBEDDINGS_DIR, TARGET_FILE)
+    model_path = os.path.join(EMBEDDINGS_DIR, MODEL_FILE)
     processed_path = os.path.join(EMBEDDINGS_DIR, PROCESSED_FILE)
     pca_path = os.path.join(EMBEDDINGS_DIR, PCA_FILE)
 
     # Check if both processed files already exist
-    if os.path.exists(processed_path) and os.path.exists(pca_path):
+    if os.path.exists(processed_path) and os.path.exists(pca_path) and os.path.exists(model_path):
+        print(f"FastText model exists at {model_path}")
         print(f"Processed embeddings already exist at {processed_path}")
         print(f"PCA 2D embeddings already exist at {pca_path}")
         return
 
-    zip_path = os.path.join(EMBEDDINGS_DIR, "glove.6B.zip")
+    zip_path = os.path.join(EMBEDDINGS_DIR, "crawl-300d-2M-subword.zip")
 
-    # Download if zip doesn't exist
-    if not os.path.exists(zip_path) and not os.path.exists(target_path):
-        print(f"Downloading GloVe embeddings from Stanford NLP...")
-        print(f"URL: {GLOVE_URL}")
-        print(f"This is about 862MB and may take a few minutes.\n")
+    # Download if zip doesn't exist and model doesn't exist
+    if not os.path.exists(zip_path) and not os.path.exists(model_path):
+        print(f"Downloading FastText crawl-300d-2M-subword model...")
+        print(f"URL: {FASTTEXT_URL}")
+        print(f"This is about 2GB and may take several minutes.\n")
 
         try:
-            urllib.request.urlretrieve(GLOVE_URL, zip_path, download_progress)
+            urllib.request.urlretrieve(FASTTEXT_URL, zip_path, download_progress)
             print("\nDownload complete!")
         except Exception as e:
             print(f"\nDownload failed: {e}")
             print("\nAlternative: Download manually from:")
-            print(f"  {GLOVE_URL}")
-            print(f"  Then extract {TARGET_FILE} to the {EMBEDDINGS_DIR}/ folder")
+            print(f"  {FASTTEXT_URL}")
+            print(f"  Then extract {MODEL_FILE} to the {EMBEDDINGS_DIR}/ folder")
             sys.exit(1)
 
-    # Extract just the 50d file
-    if not os.path.exists(target_path):
-        print(f"\nExtracting {TARGET_FILE}...")
+    # Extract the .bin file
+    if not os.path.exists(model_path):
+        print(f"\nExtracting {MODEL_FILE}...")
         try:
             with zipfile.ZipFile(zip_path, 'r') as zf:
-                zf.extract(TARGET_FILE, EMBEDDINGS_DIR)
-            print(f"Extracted to {target_path}")
+                zf.extract(MODEL_FILE, EMBEDDINGS_DIR)
+            print(f"Extracted to {model_path}")
         except Exception as e:
             print(f"Extraction failed: {e}")
             sys.exit(1)
 
-    # Process embeddings (normalize and convert to .npz)
-    embedding_matrix, words = process_embeddings(target_path, processed_path)
+    # Process embeddings (extract vocabulary, normalize and convert to .npz)
+    embedding_matrix, words = process_fasttext_model(model_path, processed_path)
 
     # Compute PCA 2D reduction for visualization
     compute_pca_2d(embedding_matrix, words, pca_path)
 
-    # Clean up text file and zip to save space
+    # Clean up zip file to save space (keep the .bin for OOV support)
     print(f"\nCleaning up temporary files...")
     try:
         if os.path.exists(zip_path):
@@ -154,14 +172,13 @@ def main():
     except:
         print(f"  Could not remove {zip_path}")
 
-    try:
-        if os.path.exists(target_path):
-            os.remove(target_path)
-            print(f"  Removed {target_path} (keeping only optimized .npz)")
-    except:
-        print(f"  Could not remove {target_path}")
-
-    print(f"\nSetup complete! You can now run: python server.py")
+    print(f"\n" + "=" * 60)
+    print("Setup complete!")
+    print(f"  - FastText model: {model_path} (kept for OOV support)")
+    print(f"  - Pre-computed vectors: {processed_path}")
+    print(f"  - 2D visualization: {pca_path}")
+    print(f"\nYou can now run: python server.py")
+    print("=" * 60)
 
 
 if __name__ == "__main__":

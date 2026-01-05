@@ -1,6 +1,7 @@
 """
 Vector Embedding Playground - Flask Server
-Loads GloVe embeddings and provides an API for vector arithmetic.
+Loads FastText embeddings and provides an API for vector arithmetic.
+Supports OOV (out-of-vocabulary) words through FastText subword vectors.
 """
 
 import os
@@ -18,6 +19,9 @@ words_list = None        # list of words corresponding to rows in embedding_matr
 word_to_idx = {}         # dict mapping word -> index in embedding_matrix
 embedding_dim = 0
 
+# Global storage for FastText model (for OOV support)
+fasttext_model = None
+
 # Global storage for 2D PCA coordinates
 embeddings_2d = None     # numpy array of shape (vocab_size, 2)
 pca_mean = None          # PCA mean for transforming new vectors
@@ -27,10 +31,21 @@ pca_components = None    # PCA components for transforming new vectors
 current_transformation = None  # Stores the currently calculated transformation vector
 
 
-def load_glove_embeddings(filepath):
-    """Load pre-processed GloVe embeddings from .npz file."""
+def load_fasttext_model(filepath):
+    """Load FastText binary model for OOV word support."""
+    global fasttext_model
+    import fasttext
+
+    print(f"Loading FastText model from {filepath}...")
+    print("  (This provides OOV/typo support via subword vectors)")
+    fasttext_model = fasttext.load_model(filepath)
+    print(f"  FastText model loaded successfully")
+
+
+def load_embeddings(filepath):
+    """Load pre-processed embeddings from .npz file."""
     global embedding_matrix, words_list, word_to_idx, embedding_dim
-    print(f"Loading embeddings from {filepath}...")
+    print(f"Loading pre-computed embeddings from {filepath}...")
 
     # Load the .npz file
     data = np.load(filepath)
@@ -41,7 +56,7 @@ def load_glove_embeddings(filepath):
     word_to_idx = {word: idx for idx, word in enumerate(words_list)}
     embedding_dim = embedding_matrix.shape[1]
 
-    print(f"Loaded {len(words_list)} words with {embedding_dim} dimensions")
+    print(f"  Loaded {len(words_list)} words with {embedding_dim} dimensions")
 
 
 def load_pca_embeddings(filepath):
@@ -54,9 +69,9 @@ def load_pca_embeddings(filepath):
         embeddings_2d = data['embeddings_2d']
         pca_mean = data.get('pca_mean', None)
         pca_components = data.get('pca_components', None)
-        print(f"Loaded 2D coordinates for {len(embeddings_2d)} words")
+        print(f"  Loaded 2D coordinates for {len(embeddings_2d)} words")
         if pca_mean is not None and pca_components is not None:
-            print(f"Loaded PCA transformation parameters")
+            print(f"  Loaded PCA transformation parameters")
     except FileNotFoundError:
         print(f"Warning: 2D PCA embeddings not found at {filepath}")
         print("Visualization will not be available. Run download_embeddings.py to generate them.")
@@ -66,11 +81,34 @@ def load_pca_embeddings(filepath):
 
 
 def get_vector(word):
-    """Get the vector for a word, returns None if not found."""
-    idx = word_to_idx.get(word.lower())
-    if idx is None:
-        return None
-    return embedding_matrix[idx]
+    """
+    Get the vector for a word.
+    First checks pre-computed vocabulary for fast lookup.
+    Falls back to FastText model for OOV words (typos, rare words).
+    Returns None only if FastText model is not loaded and word is OOV.
+    """
+    word_lower = word.lower()
+
+    # First, try pre-computed vocabulary (fast lookup)
+    idx = word_to_idx.get(word_lower)
+    if idx is not None:
+        return embedding_matrix[idx].copy()
+
+    # Fall back to FastText model for OOV words
+    if fasttext_model is not None:
+        vector = fasttext_model.get_word_vector(word_lower).astype(np.float32)
+        # Normalize the vector to match pre-computed embeddings
+        norm = np.linalg.norm(vector)
+        if norm > 0:
+            vector = vector / norm
+        return vector
+
+    return None
+
+
+def is_oov(word):
+    """Check if a word is out-of-vocabulary (not in pre-computed embeddings)."""
+    return word.lower() not in word_to_idx
 
 
 def get_2d_coords(word):
@@ -193,12 +231,12 @@ def parse_and_evaluate(equation, registers):
     Parse an equation with scalar multiplication and parentheses support.
     Examples: "king - man + woman", "0.8 * (woman - man) + king", "2 * woman - 0.5 * man"
 
-    Returns: (result_vector, processed_equation, list_of_words_used, error_message)
+    Returns: (result_vector, processed_equation, list_of_words_used, error_message, oov_words)
     """
     # Normalize the equation
     equation = equation.strip()
     if not equation:
-        return None, "", [], "Empty equation"
+        return None, "", [], "Empty equation", []
 
     # Replace register names with their values
     sorted_registers = sorted(registers.items(), key=lambda x: len(x[0]), reverse=True)
@@ -213,6 +251,7 @@ def parse_and_evaluate(equation, registers):
     word_pattern = r'\b[a-zA-Z]+\b'
     words = re.findall(word_pattern, processed_equation)
     words_used = []
+    oov_words = []
 
     # Create a safe namespace with vectors for each word
     namespace = {}
@@ -220,14 +259,19 @@ def parse_and_evaluate(equation, registers):
         word_lower = word.lower()
         vec = get_vector(word_lower)
         if vec is None:
-            return None, "", [], f"Word not found: '{word}'"
+            return None, "", [], f"Word not found: '{word}'", []
+
+        # Track OOV words
+        if is_oov(word_lower):
+            oov_words.append(word_lower)
 
         # Use the original word as variable name for case-insensitive matching
         namespace[word_lower] = vec.copy()
         words_used.append(word_lower)
 
-    # Remove duplicates from words_used
+    # Remove duplicates from words_used and oov_words
     words_used = list(dict.fromkeys(words_used))
+    oov_words = list(dict.fromkeys(oov_words))
 
     # Replace words in equation with lowercase versions for evaluation
     eval_equation = processed_equation
@@ -248,12 +292,12 @@ def parse_and_evaluate(equation, registers):
         if not isinstance(result, np.ndarray):
             result = np.array(result, dtype=np.float32)
 
-        return result, eval_equation, words_used, None
+        return result, eval_equation, words_used, None, oov_words
 
     except SyntaxError as e:
-        return None, "", [], f"Invalid equation syntax: {str(e)}"
+        return None, "", [], f"Invalid equation syntax: {str(e)}", []
     except Exception as e:
-        return None, "", [], f"Error evaluating equation: {str(e)}"
+        return None, "", [], f"Error evaluating equation: {str(e)}", []
 
 
 @app.route('/')
@@ -371,7 +415,7 @@ def calculate():
         num_results = 10
 
     # Parse and evaluate the equation
-    result_vector, processed_equation, words_used, error = parse_and_evaluate(equation, registers)
+    result_vector, processed_equation, words_used, error, oov_words = parse_and_evaluate(equation, registers)
 
     if error:
         return jsonify({'success': False, 'error': error})
@@ -407,21 +451,37 @@ def calculate():
         'results': results,
         'equation': processed_equation,
         'input_words': input_words_2d,
-        'result_vector': result_coords
+        'result_vector': result_coords,
+        'oov_words': oov_words  # Report which words were OOV (handled via FastText subwords)
     })
 
 
 @app.route('/api/check_word/<word>')
 def check_word(word):
-    """Check if a word exists in the vocabulary."""
-    exists = word.lower() in word_to_idx
-    return jsonify({'word': word, 'exists': exists})
+    """
+    Check if a word exists in the vocabulary.
+    Returns whether the word is in pre-computed vocab and whether it can be handled via OOV.
+    """
+    word_lower = word.lower()
+    in_vocab = word_lower in word_to_idx
+    can_handle = in_vocab or fasttext_model is not None
+
+    return jsonify({
+        'word': word,
+        'exists': in_vocab,
+        'oov_supported': can_handle and not in_vocab,
+        'can_use': can_handle
+    })
 
 
 @app.route('/api/vocab_size')
 def vocab_size():
     """Return the vocabulary size."""
-    return jsonify({'size': len(words_list), 'dimensions': embedding_dim})
+    return jsonify({
+        'size': len(words_list),
+        'dimensions': embedding_dim,
+        'oov_support': fasttext_model is not None
+    })
 
 
 @app.route('/api/vocab_sample')
@@ -509,11 +569,30 @@ def load_example(filename):
 
 
 if __name__ == '__main__':
-    # Look for embeddings file
+    # Look for FastText model file (for OOV support)
+    model_paths = [
+        'embeddings/crawl-300d-2M-subword.bin',
+        'crawl-300d-2M-subword.bin',
+        os.path.expanduser('~/crawl-300d-2M-subword.bin')
+    ]
+
+    model_file = None
+    for path in model_paths:
+        if os.path.exists(path):
+            model_file = path
+            break
+
+    if model_file:
+        load_fasttext_model(model_file)
+    else:
+        print("\nWarning: FastText model not found. OOV word support will be disabled.")
+        print("Words not in vocabulary will return errors.")
+
+    # Look for pre-computed embeddings file
     embedding_paths = [
-        'embeddings/glove.6B.50d.npz',
-        'glove.6B.50d.npz',
-        os.path.expanduser('~/glove.6B.50d.npz')
+        'embeddings/fasttext.crawl-300d-2M.npz',
+        'fasttext.crawl-300d-2M.npz',
+        os.path.expanduser('~/fasttext.crawl-300d-2M.npz')
     ]
 
     embedding_file = None
@@ -524,18 +603,18 @@ if __name__ == '__main__':
 
     if embedding_file is None:
         print("=" * 60)
-        print("ERROR: Processed GloVe embeddings not found!")
+        print("ERROR: Processed FastText embeddings not found!")
         print("Please run: python download_embeddings.py")
         print("=" * 60)
         exit(1)
 
-    load_glove_embeddings(embedding_file)
+    load_embeddings(embedding_file)
 
     # Load 2D PCA embeddings for visualization
     pca_paths = [
-        'embeddings/glove.6B.50d.2d.npz',
-        'glove.6B.50d.2d.npz',
-        os.path.expanduser('~/glove.6B.50d.2d.npz')
+        'embeddings/fasttext.crawl-300d-2M.2d.npz',
+        'fasttext.crawl-300d-2M.2d.npz',
+        os.path.expanduser('~/fasttext.crawl-300d-2M.2d.npz')
     ]
 
     pca_file = None
