@@ -18,6 +18,11 @@ words_list = None        # list of words corresponding to rows in embedding_matr
 word_to_idx = {}         # dict mapping word -> index in embedding_matrix
 embedding_dim = 0
 
+# Global storage for 2D PCA coordinates
+embeddings_2d = None     # numpy array of shape (vocab_size, 2)
+pca_mean = None          # PCA mean for transforming new vectors
+pca_components = None    # PCA components for transforming new vectors
+
 # Global storage for transformation vector
 current_transformation = None  # Stores the currently calculated transformation vector
 
@@ -39,12 +44,63 @@ def load_glove_embeddings(filepath):
     print(f"Loaded {len(words_list)} words with {embedding_dim} dimensions")
 
 
+def load_pca_embeddings(filepath):
+    """Load pre-computed 2D PCA embeddings and transformation parameters from .npz file."""
+    global embeddings_2d, pca_mean, pca_components
+    print(f"Loading 2D PCA embeddings from {filepath}...")
+
+    try:
+        data = np.load(filepath)
+        embeddings_2d = data['embeddings_2d']
+        pca_mean = data.get('pca_mean', None)
+        pca_components = data.get('pca_components', None)
+        print(f"Loaded 2D coordinates for {len(embeddings_2d)} words")
+        if pca_mean is not None and pca_components is not None:
+            print(f"Loaded PCA transformation parameters")
+    except FileNotFoundError:
+        print(f"Warning: 2D PCA embeddings not found at {filepath}")
+        print("Visualization will not be available. Run download_embeddings.py to generate them.")
+        embeddings_2d = None
+        pca_mean = None
+        pca_components = None
+
+
 def get_vector(word):
     """Get the vector for a word, returns None if not found."""
     idx = word_to_idx.get(word.lower())
     if idx is None:
         return None
     return embedding_matrix[idx]
+
+
+def get_2d_coords(word):
+    """Get the 2D PCA coordinates for a word, returns None if not found or not loaded."""
+    if embeddings_2d is None:
+        return None
+    idx = word_to_idx.get(word.lower())
+    if idx is None:
+        return None
+    return embeddings_2d[idx]
+
+
+def project_vector_to_2d(vector):
+    """
+    Project an arbitrary vector to 2D using the saved PCA transformation.
+    Returns None if PCA parameters are not loaded.
+    """
+    if pca_mean is None or pca_components is None:
+        return None
+
+    # Normalize the vector first (since our embeddings are normalized)
+    norm = np.linalg.norm(vector)
+    if norm > 0:
+        vector = vector / norm
+
+    # Apply PCA transformation: (vector - mean) @ components.T
+    vector_centered = vector - pca_mean
+    vector_2d = vector_centered @ pca_components.T
+
+    return vector_2d
 
 
 def find_nearest_neighbors(vector, n=10, exclude_words=None):
@@ -134,8 +190,8 @@ def calculate_average_transformation(pairs):
 
 def parse_and_evaluate(equation, registers):
     """
-    Parse an equation like "A - B + C" or "king - man + woman"
-    and evaluate it using vector arithmetic.
+    Parse an equation with scalar multiplication and parentheses support.
+    Examples: "king - man + woman", "0.8 * (woman - man) + king", "2 * woman - 0.5 * man"
 
     Returns: (result_vector, processed_equation, list_of_words_used, error_message)
     """
@@ -145,49 +201,59 @@ def parse_and_evaluate(equation, registers):
         return None, "", [], "Empty equation"
 
     # Replace register names with their values
-    # Sort by length descending to avoid partial replacements (e.g., "AB" before "A")
     sorted_registers = sorted(registers.items(), key=lambda x: len(x[0]), reverse=True)
     processed_equation = equation
     for reg_name, reg_value in sorted_registers:
-        if reg_value:  # Only replace if register has a value
-            # Use word boundaries to avoid partial matches
+        if reg_value:
             pattern = r'\b' + re.escape(reg_name) + r'\b'
             processed_equation = re.sub(pattern, reg_value.lower(), processed_equation, flags=re.IGNORECASE)
 
-    # Tokenize: split by operators while keeping them
-    tokens = re.split(r'(\s*[\+\-]\s*)', processed_equation)
-    tokens = [t.strip() for t in tokens if t.strip()]
-
-    if not tokens:
-        return None, "", [], "No valid tokens in equation"
-
-    # Parse and evaluate
-    result = None
-    current_op = '+'
+    # Extract all words (tokens that are not numbers, operators, or parentheses)
+    # Words are sequences of letters
+    word_pattern = r'\b[a-zA-Z]+\b'
+    words = re.findall(word_pattern, processed_equation)
     words_used = []
 
-    for token in tokens:
-        if token in ['+', '-']:
-            current_op = token
-        else:
-            word = token.lower()
-            vec = get_vector(word)
-            if vec is None:
-                return None, "", [], f"Word not found: '{token}'"
+    # Create a safe namespace with vectors for each word
+    namespace = {}
+    for word in words:
+        word_lower = word.lower()
+        vec = get_vector(word_lower)
+        if vec is None:
+            return None, "", [], f"Word not found: '{word}'"
 
-            words_used.append(word)
+        # Use the original word as variable name for case-insensitive matching
+        namespace[word_lower] = vec.copy()
+        words_used.append(word_lower)
 
-            if result is None:
-                result = vec.copy()
-            elif current_op == '+':
-                result = result + vec
-            elif current_op == '-':
-                result = result - vec
+    # Remove duplicates from words_used
+    words_used = list(dict.fromkeys(words_used))
 
-    if result is None:
-        return None, "", [], "Could not evaluate equation"
+    # Replace words in equation with lowercase versions for evaluation
+    eval_equation = processed_equation
+    for word in words:
+        # Replace each word with its lowercase version
+        eval_equation = re.sub(r'\b' + re.escape(word) + r'\b', word.lower(), eval_equation, flags=re.IGNORECASE)
 
-    return result, processed_equation, words_used, None
+    # Add numpy to namespace for array operations
+    namespace['__builtins__'] = {}
+    import numpy as np
+    namespace['np'] = np
+
+    try:
+        # Evaluate the expression safely
+        result = eval(eval_equation, namespace)
+
+        # Ensure result is a numpy array
+        if not isinstance(result, np.ndarray):
+            result = np.array(result, dtype=np.float32)
+
+        return result, eval_equation, words_used, None
+
+    except SyntaxError as e:
+        return None, "", [], f"Invalid equation syntax: {str(e)}"
+    except Exception as e:
+        return None, "", [], f"Error evaluating equation: {str(e)}"
 
 
 @app.route('/')
@@ -313,10 +379,35 @@ def calculate():
     # Find nearest neighbors
     neighbors = find_nearest_neighbors(result_vector, n=num_results, exclude_words=words_used)
 
+    # Build results with 2D coordinates
+    results = []
+    for word, sim in neighbors:
+        result_item = {'word': word, 'similarity': round(sim, 4)}
+        coords = get_2d_coords(word)
+        if coords is not None:
+            result_item['x'] = float(coords[0])
+            result_item['y'] = float(coords[1])
+        results.append(result_item)
+
+    # Get 2D coordinates for input words
+    input_words_2d = {}
+    for word in words_used:
+        coords = get_2d_coords(word)
+        if coords is not None:
+            input_words_2d[word] = {'word': word, 'x': float(coords[0]), 'y': float(coords[1])}
+
+    # Project the result vector to 2D
+    result_vector_2d = project_vector_to_2d(result_vector)
+    result_coords = None
+    if result_vector_2d is not None:
+        result_coords = {'x': float(result_vector_2d[0]), 'y': float(result_vector_2d[1])}
+
     return jsonify({
         'success': True,
-        'results': [{'word': word, 'similarity': round(sim, 4)} for word, sim in neighbors],
-        'equation': processed_equation
+        'results': results,
+        'equation': processed_equation,
+        'input_words': input_words_2d,
+        'result_vector': result_coords
     })
 
 
@@ -331,6 +422,32 @@ def check_word(word):
 def vocab_size():
     """Return the vocabulary size."""
     return jsonify({'size': len(words_list), 'dimensions': embedding_dim})
+
+
+@app.route('/api/vocab_sample')
+def vocab_sample():
+    """Return a sample of vocabulary words with 2D coordinates for background visualization."""
+    if embeddings_2d is None:
+        return jsonify({'success': False, 'error': '2D embeddings not available'})
+
+    # Sample every Nth word to get approximately 2000-5000 words for background
+    sample_rate = max(1, len(words_list) // 3000)
+
+    sample_words = []
+    for i in range(0, len(words_list), sample_rate):
+        word = words_list[i]
+        coords = embeddings_2d[i]
+        sample_words.append({
+            'word': word,
+            'x': float(coords[0]),
+            'y': float(coords[1])
+        })
+
+    return jsonify({
+        'success': True,
+        'words': sample_words,
+        'count': len(sample_words)
+    })
 
 
 @app.route('/api/list_examples')
@@ -413,6 +530,25 @@ if __name__ == '__main__':
         exit(1)
 
     load_glove_embeddings(embedding_file)
+
+    # Load 2D PCA embeddings for visualization
+    pca_paths = [
+        'embeddings/glove.6B.50d.2d.npz',
+        'glove.6B.50d.2d.npz',
+        os.path.expanduser('~/glove.6B.50d.2d.npz')
+    ]
+
+    pca_file = None
+    for path in pca_paths:
+        if os.path.exists(path):
+            pca_file = path
+            break
+
+    if pca_file:
+        load_pca_embeddings(pca_file)
+    else:
+        print("\nWarning: 2D PCA embeddings not found. Visualization will be limited.")
+        print("Run 'python download_embeddings.py' to generate them if needed.")
 
     print("\nStarting server at http://localhost:5000")
     app.run(debug=True, host='0.0.0.0', port=5000)

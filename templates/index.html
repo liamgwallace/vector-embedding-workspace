@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Word Equations - Vector Embedding Playground</title>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -228,6 +229,59 @@
             color: #95a5a6;
             margin-top: 20px;
         }
+
+        #visualization-container {
+            height: 600px;
+            margin-top: 15px;
+        }
+
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toggle-container label {
+            font-size: 12px;
+            color: #7f8c8d;
+            cursor: pointer;
+        }
+
+        .toggle-container input[type="checkbox"] {
+            cursor: pointer;
+        }
+
+        .fullscreen-btn {
+            padding: 6px 12px;
+            font-size: 12px;
+            color: white;
+            background: #3498db;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .fullscreen-btn:hover {
+            background: #2980b9;
+        }
+
+        .visualization-section.fullscreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 9999;
+            background: white;
+            margin: 0;
+            border-radius: 0;
+            padding: 20px;
+        }
+
+        .visualization-section.fullscreen #visualization-container {
+            height: calc(100vh - 120px);
+        }
     </style>
 </head>
 <body>
@@ -240,12 +294,44 @@
 
     <!-- Explanation Section -->
     <div class="section">
-        <p style="color: #2c3e50; line-height: 1.6; margin: 0;">
-            Words are represented as points in a high-dimensional space where similar meanings are close together.
-            This lets you do math with words: <strong>woman - man</strong> gives a vector that represents the relationship
-            that maps man to woman. If that is added to king as <strong>woman - man + king = queen</strong>
-            the man to woman direction is added to the royalty direction giving a female royalty.
-            Try combining words with + and - to discover semantic relationships.
+        <h3 style="margin-top: 0; color: #2c3e50;">How It Works</h3>
+        <p style="color: #2c3e50; line-height: 1.8; margin: 0 0 15px 0;">
+            Words are represented as points in a 50-dimensional space where similar meanings cluster together.
+            When you subtract one word from another, you create a <strong>concept vector</strong> that captures the relationship between them.
+            For example, <strong>woman - man</strong> creates a vector pointing in the "gender direction" from masculine to feminine.
+            When you add this concept vector to a new word like <strong>king</strong>, you're saying
+            "apply the same transformation" — giving you <strong>queen</strong>.
+        </p>
+
+        <h3 style="color: #2c3e50; margin-bottom: 10px;">What Works Best</h3>
+        <p style="color: #2c3e50; line-height: 1.8; margin: 0 0 10px 0;">
+            These embeddings are trained on Wikipedia and news text, so they excel at relationships that appear frequently in writing:
+        </p>
+        <ul style="color: #2c3e50; line-height: 1.8; margin: 0 0 15px 20px;">
+            <li><strong>Geography:</strong> paris - france + italy → rome, tokyo - japan + china → beijing</li>
+            <li><strong>Languages:</strong> french - france + spain → spanish, english - england + germany → german</li>
+            <li><strong>Gender:</strong> actress - actor + waiter → waitress, prince - princess + queen → king</li>
+            <li><strong>Verb Tenses:</strong> walking - walk + run → running, went - go + do → did</li>
+            <li><strong>Professions:</strong> guitarist - guitar + piano → pianist, doctor - hospital + school → teacher</li>
+            <li><strong>Comparatives:</strong> better - good + bad → worse, fastest - fast + slow → slowest</li>
+        </ul>
+
+        <h3 style="color: #2c3e50; margin-bottom: 10px;">Try These Examples</h3>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 15px;">
+            <code style="background: #f0f0f0; padding: 8px; border-radius: 4px; font-size: 13px;">berlin - germany + russia</code>
+            <code style="background: #f0f0f0; padding: 8px; border-radius: 4px; font-size: 13px;">italian - italy + japan</code>
+            <code style="background: #f0f0f0; padding: 8px; border-radius: 4px; font-size: 13px;">nephew - niece + aunt</code>
+            <code style="background: #f0f0f0; padding: 8px; border-radius: 4px; font-size: 13px;">swimming - swim + dance</code>
+            <code style="background: #f0f0f0; padding: 8px; border-radius: 4px; font-size: 13px;">queen - woman + man</code>
+            <code style="background: #f0f0f0; padding: 8px; border-radius: 4px; font-size: 13px;">pianist - piano + violin</code>
+        </div>
+
+        <h3 style="color: #2c3e50; margin-bottom: 10px;">Advanced: Scalar Multiplication</h3>
+        <p style="color: #2c3e50; line-height: 1.8; margin: 0;">
+            You can multiply concept vectors by numbers to control their strength. Use parentheses to group operations:
+            <strong>0.8 * (woman - man) + king</strong> applies 80% of the gender transformation.
+            Try <strong>2 * (paris - france) + italy</strong> to amplify the capital relationship, or
+            <strong>0.3 * king + 0.7 * queen</strong> to blend between concepts.
         </p>
     </div>
 
@@ -258,9 +344,9 @@
                 <input type="number" id="num-results" value="10" min="1" max="50">
             </div>
         </div>
-        <input type="text" id="equation" class="equation-input" placeholder="e.g., woman - man + king">
+        <input type="text" id="equation" class="equation-input" placeholder="e.g., 0.8 * (woman - man) + king">
         <button id="calculate-btn" class="calculate-btn">Calculate</button>
-        <p class="hint">Use + and - to combine words. Example: paris - france + germany</p>
+        <p class="hint">Examples: paris - france + germany | 0.8 * (woman - man) + king | 2 * woman - 0.5 * man</p>
     </div>
 
     <!-- Results Section -->
@@ -272,6 +358,19 @@
         <div id="results-container">
             <div class="empty-state">Enter an equation and click Calculate</div>
         </div>
+    </div>
+
+    <!-- Visualization Section -->
+    <div class="section visualization-section" id="visualization-section">
+        <div class="section-header">
+            <h2 class="section-title">Vector Visualization</h2>
+            <div class="toggle-container">
+                <input type="checkbox" id="show-vocab-toggle">
+                <label for="show-vocab-toggle">Show all words</label>
+                <button id="fullscreen-btn" class="fullscreen-btn">Fullscreen</button>
+            </div>
+        </div>
+        <div id="visualization-container"></div>
     </div>
 
     <!-- History Section -->
@@ -289,6 +388,9 @@
     <script>
         // State
         let history = [];
+        let vocabularySample = null;
+        let showVocabulary = false;
+        let currentVisualizationData = null;
 
         // DOM Elements
         const equationInput = document.getElementById('equation');
@@ -298,6 +400,10 @@
         const equationDisplayDiv = document.getElementById('equation-display');
         const historySelect = document.getElementById('history-select');
         const statusBar = document.getElementById('status-bar');
+        const showVocabToggle = document.getElementById('show-vocab-toggle');
+        const visualizationContainer = document.getElementById('visualization-container');
+        const visualizationSection = document.getElementById('visualization-section');
+        const fullscreenBtn = document.getElementById('fullscreen-btn');
 
         // Calculate results
         async function calculate() {
@@ -327,6 +433,14 @@
                 } else {
                     showResults(data.results, data.equation);
                     addToHistory(equation, data.results);
+
+                    // Store and visualize data
+                    currentVisualizationData = {
+                        results: data.results,
+                        inputWords: data.input_words || {},
+                        resultVector: data.result_vector || null
+                    };
+                    updateVisualization();
                 }
             } catch (err) {
                 showError('Failed to connect to server');
@@ -420,6 +534,144 @@
             calculate();
         }
 
+        // Visualization functions
+        function updateVisualization() {
+            if (!currentVisualizationData) {
+                return;
+            }
+
+            const traces = [];
+
+            // Background vocabulary (if enabled)
+            if (showVocabulary && vocabularySample) {
+                traces.push({
+                    x: vocabularySample.map(w => w.x),
+                    y: vocabularySample.map(w => w.y),
+                    mode: 'markers',
+                    type: 'scatter',
+                    name: 'All Words',
+                    marker: {
+                        size: 4,
+                        color: '#000000',
+                        opacity: 0.3
+                    },
+                    text: vocabularySample.map(w => w.word),
+                    hoverinfo: 'text',
+                    showlegend: true
+                });
+            }
+
+            // Input words
+            const inputWords = Object.values(currentVisualizationData.inputWords);
+            if (inputWords.length > 0 && inputWords[0].x !== undefined) {
+                traces.push({
+                    x: inputWords.map(w => w.x),
+                    y: inputWords.map(w => w.y),
+                    mode: 'markers+text',
+                    type: 'scatter',
+                    name: 'Input Words',
+                    marker: {
+                        size: 12,
+                        color: '#3498db',
+                        symbol: 'circle',
+                        line: { width: 2, color: '#2980b9' }
+                    },
+                    text: inputWords.map(w => w.word),
+                    textposition: 'top center',
+                    textfont: { size: 10, color: '#2c3e50', family: 'monospace' },
+                    hoverinfo: 'text',
+                    showlegend: true
+                });
+            }
+
+            // Result vector (the calculated vector position)
+            if (currentVisualizationData.resultVector && currentVisualizationData.resultVector.x !== undefined) {
+                traces.push({
+                    x: [currentVisualizationData.resultVector.x],
+                    y: [currentVisualizationData.resultVector.y],
+                    mode: 'markers+text',
+                    type: 'scatter',
+                    name: 'Result Vector',
+                    marker: {
+                        size: 14,
+                        color: '#9b59b6',
+                        symbol: 'star',
+                        line: { width: 2, color: '#8e44ad' }
+                    },
+                    text: ['RESULT'],
+                    textposition: 'top center',
+                    textfont: { size: 10, color: '#9b59b6', family: 'monospace', weight: 'bold' },
+                    hoverinfo: 'text',
+                    showlegend: true
+                });
+            }
+
+            // Result words (nearest neighbors)
+            const results = currentVisualizationData.results.filter(r => r.x !== undefined);
+            if (results.length > 0) {
+                traces.push({
+                    x: results.map(r => r.x),
+                    y: results.map(r => r.y),
+                    mode: 'markers+text',
+                    type: 'scatter',
+                    name: 'Nearest Words',
+                    marker: {
+                        size: 10,
+                        color: '#e74c3c',
+                        symbol: 'diamond',
+                        line: { width: 1, color: '#c0392b' }
+                    },
+                    text: results.map(r => r.word),
+                    textposition: 'top center',
+                    textfont: { size: 9, color: '#e74c3c', family: 'monospace' },
+                    hovertemplate: '<b>%{text}</b><br>Similarity: ' + results.map(r => r.similarity).join('<br>Similarity: '),
+                    showlegend: true
+                });
+            }
+
+            const layout = {
+                title: 'Word Vector Space (PCA 2D Projection)',
+                xaxis: {
+                    title: 'PC1',
+                    zeroline: true,
+                    showgrid: true,
+                    gridcolor: '#f0f0f0'
+                },
+                yaxis: {
+                    title: 'PC2',
+                    zeroline: true,
+                    showgrid: true,
+                    gridcolor: '#f0f0f0'
+                },
+                hovermode: 'closest',
+                plot_bgcolor: '#fafafa',
+                paper_bgcolor: 'white',
+                margin: { t: 40, r: 20, b: 40, l: 50 }
+            };
+
+            const config = {
+                responsive: true,
+                displayModeBar: true,
+                modeBarButtonsToRemove: ['lasso2d', 'select2d'],
+                displaylogo: false
+            };
+
+            Plotly.newPlot(visualizationContainer, traces, layout, config);
+        }
+
+        async function loadVocabularySample() {
+            try {
+                const response = await fetch('/api/vocab_sample');
+                const data = await response.json();
+                if (data.success) {
+                    vocabularySample = data.words;
+                    console.log(`Loaded ${data.count} vocabulary words for background`);
+                }
+            } catch (err) {
+                console.error('Failed to load vocabulary sample:', err);
+            }
+        }
+
         // Event listeners
 
         calculateBtn.addEventListener('click', calculate);
@@ -432,12 +684,46 @@
             loadFromHistory(e.target.value);
         });
 
+        showVocabToggle.addEventListener('change', (e) => {
+            showVocabulary = e.target.checked;
+            updateVisualization();
+        });
+
+        fullscreenBtn.addEventListener('click', () => {
+            const isFullscreen = visualizationSection.classList.contains('fullscreen');
+            if (isFullscreen) {
+                visualizationSection.classList.remove('fullscreen');
+                fullscreenBtn.textContent = 'Fullscreen';
+            } else {
+                visualizationSection.classList.add('fullscreen');
+                fullscreenBtn.textContent = 'Exit Fullscreen';
+            }
+            // Resize the plot to fit the new container size
+            setTimeout(() => {
+                Plotly.Plots.resize(visualizationContainer);
+            }, 100);
+        });
+
+        // Exit fullscreen on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && visualizationSection.classList.contains('fullscreen')) {
+                visualizationSection.classList.remove('fullscreen');
+                fullscreenBtn.textContent = 'Fullscreen';
+                setTimeout(() => {
+                    Plotly.Plots.resize(visualizationContainer);
+                }, 100);
+            }
+        });
+
         // Initialize
         async function init() {
             try {
                 const response = await fetch('/api/vocab_size');
                 const data = await response.json();
                 statusBar.textContent = `Vocabulary: ${data.size.toLocaleString()} words (${data.dimensions}D)`;
+
+                // Load vocabulary sample for background visualization
+                await loadVocabularySample();
             } catch (err) {
                 statusBar.textContent = 'Could not connect to server';
             }

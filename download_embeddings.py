@@ -9,11 +9,13 @@ import sys
 import urllib.request
 import zipfile
 import numpy as np
+from sklearn.decomposition import PCA
 
 GLOVE_URL = "https://nlp.stanford.edu/data/glove.6B.zip"
 EMBEDDINGS_DIR = "embeddings"
 TARGET_FILE = "glove.6B.50d.txt"
 PROCESSED_FILE = "glove.6B.50d.npz"
+PCA_FILE = "glove.6B.50d.2d.npz"
 
 
 def download_progress(count, block_size, total_size):
@@ -63,6 +65,36 @@ def process_embeddings(txt_path, npz_path):
 
     print(f"  Saved! File size: {os.path.getsize(npz_path) / 1024 / 1024:.1f} MB")
 
+    return embedding_matrix, words
+
+
+def compute_pca_2d(embedding_matrix, words, pca_path):
+    """
+    Compute PCA to reduce embeddings to 2D for visualization.
+    Saves both the 2D coordinates and the PCA transformation parameters.
+    """
+    print(f"\nComputing PCA reduction to 2D...")
+    print(f"  Input shape: {embedding_matrix.shape}")
+
+    # Fit PCA on the full embedding matrix
+    pca = PCA(n_components=2)
+    embeddings_2d = pca.fit_transform(embedding_matrix)
+
+    print(f"  Output shape: {embeddings_2d.shape}")
+    print(f"  Explained variance: {pca.explained_variance_ratio_[0]:.3f}, {pca.explained_variance_ratio_[1]:.3f}")
+    print(f"  Total explained variance: {sum(pca.explained_variance_ratio_):.3f}")
+    print(f"  Saving to {pca_path}...")
+
+    # Save 2D embeddings along with PCA transformation parameters
+    # We need mean and components to transform new vectors
+    np.savez_compressed(pca_path,
+                       embeddings_2d=embeddings_2d.astype(np.float32),
+                       words=words,
+                       pca_mean=pca.mean_.astype(np.float32),
+                       pca_components=pca.components_.astype(np.float32))
+
+    print(f"  Saved! File size: {os.path.getsize(pca_path) / 1024 / 1024:.1f} MB")
+
 
 def main():
     # Create embeddings directory
@@ -70,10 +102,12 @@ def main():
 
     target_path = os.path.join(EMBEDDINGS_DIR, TARGET_FILE)
     processed_path = os.path.join(EMBEDDINGS_DIR, PROCESSED_FILE)
+    pca_path = os.path.join(EMBEDDINGS_DIR, PCA_FILE)
 
-    # Check if processed file already exists
-    if os.path.exists(processed_path):
+    # Check if both processed files already exist
+    if os.path.exists(processed_path) and os.path.exists(pca_path):
         print(f"Processed embeddings already exist at {processed_path}")
+        print(f"PCA 2D embeddings already exist at {pca_path}")
         return
 
     zip_path = os.path.join(EMBEDDINGS_DIR, "glove.6B.zip")
@@ -106,7 +140,10 @@ def main():
             sys.exit(1)
 
     # Process embeddings (normalize and convert to .npz)
-    process_embeddings(target_path, processed_path)
+    embedding_matrix, words = process_embeddings(target_path, processed_path)
+
+    # Compute PCA 2D reduction for visualization
+    compute_pca_2d(embedding_matrix, words, pca_path)
 
     # Clean up text file and zip to save space
     print(f"\nCleaning up temporary files...")
