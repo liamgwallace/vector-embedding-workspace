@@ -13,6 +13,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Override fasttext-wheel with regular fasttext for Linux
+# (requirements.txt uses fasttext-wheel for Windows compatibility)
+RUN pip uninstall -y fasttext-wheel && pip install --no-cache-dir fasttext
+
 # Copy application files
 COPY server.py .
 COPY download_embeddings.py .

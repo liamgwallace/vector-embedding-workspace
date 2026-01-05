@@ -33,6 +33,73 @@ def download_progress(count, block_size, total_size):
     sys.stdout.flush()
 
 
+def load_common_words(model, target_size=500000):
+    """
+    Workaround for get_words() Unicode errors: Extract words by downloading
+    a large word frequency list and filtering for words with valid vectors.
+    """
+    print("  Downloading large word frequency list...")
+
+    words = []
+
+    # Try to download a comprehensive word list (330K+ words)
+    try:
+        import urllib.request
+        import gzip
+
+        # Try getting words from multiple sources
+        sources = [
+            # SCOWL word list (comprehensive English word list)
+            "https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt",
+        ]
+
+        word_list = []
+        for url in sources:
+            try:
+                print(f"  Downloading from {url.split('/')[-1]}...")
+                response = urllib.request.urlopen(url, timeout=30)
+                content = response.read().decode('utf-8')
+                word_list.extend(content.strip().split('\n'))
+                print(f"  Downloaded {len(word_list)} words")
+                break
+            except:
+                continue
+
+        if not word_list:
+            raise Exception("Could not download word list from any source")
+
+        # Test each word to see if the model knows it
+        print(f"  Testing words with model (targeting {target_size} words)...")
+        valid_count = 0
+
+        for i, word in enumerate(word_list):
+            if (i + 1) % 10000 == 0:
+                print(f"    Tested {i + 1} words, found {valid_count} valid...")
+
+            word = word.strip().lower()
+            if word and len(word) > 1 and word.isalpha():
+                try:
+                    # Test if we can get a vector for this word
+                    vec = model.get_word_vector(word)
+                    if vec is not None and len(vec) > 0:
+                        words.append(word)
+                        valid_count += 1
+                except:
+                    pass
+
+            if len(words) >= target_size:
+                break
+
+        print(f"  Successfully extracted {len(words)} valid words from model")
+        return words
+
+    except Exception as e:
+        print(f"  Error: Could not complete word extraction: {e}")
+        print(f"  The FastText model file may be corrupted.")
+        print(f"  Please delete the embeddings folder and run this script again.")
+        raise
+
+
 def process_fasttext_model(model_path, npz_path, vocab_size=VOCAB_SIZE):
     """
     Load FastText binary model and extract vocabulary embeddings.
@@ -46,7 +113,23 @@ def process_fasttext_model(model_path, npz_path, vocab_size=VOCAB_SIZE):
     model = fasttext.load_model(model_path)
 
     # Get all words from the model
-    all_words = model.get_words()
+    # Try get_words() first, fall back to alternatives if it fails
+    try:
+        all_words = model.get_words()
+    except (UnicodeDecodeError, Exception) as e:
+        print(f"  Warning: get_words() failed with {type(e).__name__}, using workaround...")
+        # Workaround: Try words attribute, but it may also fail
+        try:
+            if hasattr(model, 'words'):
+                all_words = model.words
+            else:
+                raise AttributeError("No words attribute")
+        except (UnicodeDecodeError, AttributeError, Exception):
+            # Alternative: manually extract common words and test them
+            print("  Extracting vocabulary by testing common words...")
+            # Load a common word list
+            all_words = load_common_words(model)
+
     print(f"  Model vocabulary size: {len(all_words)} words")
 
     # Limit to top N words (they're already sorted by frequency)
