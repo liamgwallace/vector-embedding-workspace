@@ -13,6 +13,8 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Increased timeout for large FastText model download (~2GB) and processing
+    timeout-minutes: 120
     permissions:
       contents: read
       packages: write
@@ -20,6 +22,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          # Remove unnecessary tools to free up space for the large model
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/boost
+          df -h
 
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
